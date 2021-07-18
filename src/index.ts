@@ -17,13 +17,25 @@ let start: DateTime | null = null;
 let end: DateTime | null = null;
 let durationMessage: string | null = null;
 
-const humanizeDuration = (duration: Duration): string => {
-  const minutePart = duration.minutes === 1 ? '1 minute' : `${duration.minutes} minutes`;
-  const hourPart = duration.hours === 1 ? '1 hour' : `${duration.hours} hours`;
-  if (duration.minutes === 0) {
-    return hourPart;
+const humanizeDuration = (duration: Duration, options?: { short: boolean }): string => {
+  let minutePart: string = '';
+  let hourPart: string = '';
+  let dayPart: string = '';
+  if (options?.short) {
+    // the lowest unit is a float, so we need to round it
+    minutePart = `${Math.round(duration.minutes)}m`;
+    hourPart = `${Math.round(duration.hours)}h`;
+    dayPart = `${Math.round(duration.days)}d`;
+  } else {
+    minutePart = Math.round(duration.minutes) === 1 ? '1 minute' : `${Math.round(duration.minutes)} minutes`;
+    hourPart = duration.hours === 1 ? '1 hour' : `${duration.hours} hours`;
+    dayPart = duration.days === 1 ? '1 day' : `${duration.days} days`;
   }
-  return `${hourPart}, ${minutePart}`;
+  return [
+    [dayPart, duration.days],
+    [hourPart, duration.hours],
+    [minutePart, Math.round(duration.minutes)],
+  ].filter(([_, value]) => value > 0).map(([str]) => str).join(options?.short ? ' ' : ', ');
 };
 
 const checkForMaintenance = async () => {
@@ -32,10 +44,8 @@ const checkForMaintenance = async () => {
   end = maint?.end ?? null;
   const now = DateTime.now();
   if (start && end && start <= now && now <= end) {
-    const duration = end.diff(start, ['hours', 'minutes']);
-    if (duration.minutes === 0) {
-      durationMessage = humanizeDuration(duration);
-    }
+    const duration = end.diff(DateTime.now(), ['hours', 'minutes']);
+    durationMessage = humanizeDuration(duration, { short: true });
   } else {
     durationMessage = null;
   }
@@ -61,10 +71,18 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isCommand()) {
     console.log(interaction);
     if (interaction.commandName === 'maintenance') {
+      // four cases:
+      // - start & end are null, meaning no tweets matched.
+      // - end is in the past, meaning maintenance already concluded.
+      // - DateTime.now() is between start and end, meaning maintenance is currently happening
+      // - start is in the future, meaning maintenance will happen in the future.
       if (!start || !end) {
         interaction.reply('No upcoming maintenance announced.');
       } else if (DateTime.now() > end) {
         interaction.reply(`No upcoming maintenance announced; most recent maintenance ended ${formatDateTime(end, { withDate: true })}`);
+      } else if (DateTime.now() < start) {
+        const untilStart = start.diff(DateTime.now(), ['days', 'hours', 'minutes']);
+        interaction.reply(`⚠️ **__Upcoming maintenance!__**\n**Start:** ${formatDateTime(start, { withDate: true })}\n(${humanizeDuration(untilStart)} from now)\n**End:** ${formatDateTime(end, { withDate: true })}\n**Duration:** ${humanizeDuration(end.diff(start, ['hours', 'minutes']))}`);
       } else {
         interaction.reply(`Maintenance will end in ${durationMessage}`);
       }
@@ -78,7 +96,7 @@ client.on('interactionCreate', async (interaction) => {
 }());
 
 (function updateBotActivity() {
-  const statusMessage = durationMessage ? `⚠️ 🔨 ends in ${durationMessage}` : formatDateTime(DateTime.now());
+  const statusMessage = durationMessage ? `⚠️ Maint ends in ${durationMessage}` : formatDateTime(DateTime.now());
   client.user?.setActivity(statusMessage, { type: 'WATCHING' });
   setTimeout(updateBotActivity, 30000); // every 30 seconds
 }());
