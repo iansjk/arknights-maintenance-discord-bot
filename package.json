@@ -6,6 +6,10 @@
   "author": "Ian Kim",
   "license": "MIT",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iansjk/arknights-maintenance-discord-bot"
+  },
   "scripts": {
     "debug": "node --nolazy --inspect -r ts-node/register src/index.ts",
     "start": "yarn install && node -r ts-node/register src/index.ts"
