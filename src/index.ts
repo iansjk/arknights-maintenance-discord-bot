@@ -3,21 +3,37 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const client = new Discord.Client({ intents: ['GUILD_MESSAGES', 'GUILD_INTEGRATIONS'] });
+['TOKEN', 'TWITTER_API_BEARER_TOKEN', 'HOME_GUILD'].forEach((envvar) => {
+  if (!process.env[envvar]) {
+    throw new Error(`Required environment variable ${envvar} is not set`);
+  }
+});
+
+// eslint-disable-next-line import/first
+import { checkForMaintenance, formatDateTime } from './twitter';
+
+const client = new Discord.Client({ intents: ['GUILD_MESSAGES'] });
 client.login(process.env.TOKEN);
 
 client.once('ready', () => {
   const guild = client.guilds.cache.get(process.env.HOME_GUILD as any);
   if (guild) {
-    guild.commands.create({ name: 'ping', description: 'Replies with "Pong!"' });
+    guild.commands.create({ name: 'maintenance', description: 'Displays info about upcoming Arknights global server maintenance' });
   }
 });
 
-client.on('interactionCreate', (interaction) => {
+client.on('interactionCreate', async (interaction) => {
   if (interaction.isCommand()) {
     console.log(interaction);
-    if (interaction.commandName === 'ping') {
-      interaction.reply('Pong!');
+    if (interaction.commandName === 'maintenance') {
+      const maintenance = await checkForMaintenance();
+      if (!maintenance) {
+        interaction.reply('No upcoming maintenance announced.');
+      } else if (!maintenance.inFuture) {
+        interaction.reply(`No upcoming maintenance announced; most recent maintenance ended ${formatDateTime(maintenance.end)}`);
+      } else {
+        interaction.reply(`Maintenance starts ${formatDateTime(maintenance.start)} and ends ${formatDateTime(maintenance.end)}`);
+      }
     }
   }
 });
