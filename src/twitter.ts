@@ -22,14 +22,14 @@ const twitter = new Twitter({ bearer_token: process.env.TWITTER_API_BEARER_TOKEN
 interface Maintenance {
   start: DateTime;
   end: DateTime;
-  inFuture: boolean;
 }
 
 // eslint-disable-next-line import/prefer-default-export
-export const checkForMaintenance = async (): Promise<Maintenance | null> => {
+export const fetchLatestMaintenanceTweet = async (): Promise<Maintenance | null> => {
   const response = await twitter.get<TwitterRecentTweetsResponse>('tweets/search/recent', { query: 'perform maintenance from:ArknightsEN' });
   const mostRecentId = response.meta.newest_id;
   const mostRecentTweet = response.data.find((tweet) => tweet.id === mostRecentId);
+  console.log('mostRecentTweet:', mostRecentTweet);
   const match = mostRecentTweet?.text.match(tweetDateTimeRegex);
   if (match?.groups) {
     const {
@@ -40,10 +40,9 @@ export const checkForMaintenance = async (): Promise<Maintenance | null> => {
     return {
       start,
       end,
-      inFuture: start > DateTime.now(),
     };
   }
   return null;
 };
 
-export const formatDateTime = (dt: DateTime): string => dt.setZone('UTC-7').toFormat('DDD t (\'UTC\'Z)');
+export const formatDateTime = (dt: DateTime, options?: { withDate?: boolean }): string => dt.setZone('UTC-7').toFormat(options?.withDate ? "DDD T 'UTC'Z" : "T 'UTC'Z");
