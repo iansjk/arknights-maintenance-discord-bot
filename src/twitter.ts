@@ -28,19 +28,21 @@ interface Maintenance {
 export const fetchLatestMaintenanceTweet = async (): Promise<Maintenance | null> => {
   const response = await twitter.get<TwitterRecentTweetsResponse>('tweets/search/recent', { query: 'perform maintenance from:ArknightsEN' });
   const mostRecentId = response.meta.newest_id;
-  const mostRecentTweet = response.data.find((tweet) => tweet.id === mostRecentId);
-  console.log('mostRecentTweet:', mostRecentTweet);
-  const match = mostRecentTweet?.text.match(tweetDateTimeRegex);
-  if (match?.groups) {
-    const {
-      date, startTime, endTime, utcOffsetTimezone,
-    } = match.groups;
-    const start = DateTime.fromFormat(`${date} ${startTime} ${utcOffsetTimezone}`, 'DDD T Z');
-    const end = DateTime.fromFormat(`${date} ${endTime} ${utcOffsetTimezone}`, 'DDD T Z');
-    return {
-      start,
-      end,
-    };
+  if (response?.data) {
+    const mostRecentTweet = response.data.find((tweet) => tweet.id === mostRecentId);
+    console.log('mostRecentTweet:', mostRecentTweet);
+    const match = mostRecentTweet?.text.match(tweetDateTimeRegex);
+    if (match?.groups) {
+      const {
+        date, startTime, endTime, utcOffsetTimezone,
+      } = match.groups;
+      const start = DateTime.fromFormat(`${date} ${startTime} ${utcOffsetTimezone}`, 'DDD T Z');
+      const end = DateTime.fromFormat(`${date} ${endTime} ${utcOffsetTimezone}`, 'DDD T Z');
+      return {
+        start,
+        end,
+      };
+    }
   }
   return null;
 };
