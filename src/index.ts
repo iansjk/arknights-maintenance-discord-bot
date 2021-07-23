@@ -4,7 +4,7 @@ import { DateTime, Duration } from 'luxon';
 
 dotenv.config();
 
-['TOKEN', 'TWITTER_API_BEARER_TOKEN', 'HOME_GUILD', 'CHECK_FREQUENCY_IN_MINUTES'].forEach((envvar) => {
+['TOKEN', 'TWITTER_API_BEARER_TOKEN', 'CHECK_FREQUENCY_IN_MINUTES'].forEach((envvar) => {
   if (!process.env[envvar]) {
     throw new Error(`Required environment variable ${envvar} is not set`);
   }
@@ -58,13 +58,13 @@ const client = new Discord.Client({ intents: ['GUILD_MESSAGES'] });
 console.log('Logging in...');
 client.login(process.env.TOKEN);
 
-client.once('ready', () => {
-  console.log('Bot ready.');
-  const guild = client.guilds.cache.get(process.env.HOME_GUILD as any);
-  if (guild) {
-    guild.commands.create({ name: 'maintenance', description: 'Displays info about upcoming Arknights global server maintenance' });
-    console.log('/maintenance command created in guild:', guild);
+client.once('ready', async () => {
+  if (!client.application?.owner) {
+    await client.application?.fetch();
   }
+  console.log('Bot ready.');
+  await client.application?.commands.create({ name: 'maintenance', description: 'Displays info about upcoming Arknights global server maintenance' });
+  console.log('/maintenance global command created');
 });
 
 client.on('interactionCreate', async (interaction) => {
