@@ -15,7 +15,7 @@ interface TwitterRecentTweetsResponse {
   }
 }
 
-const tweetDateTimeRegex = /(?<date>(?:January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4}), (?<startTime>[\d:]+)-(?<endTime>[\d:]+) \(UTC(?<utcOffsetTimezone>[-\d]+)\)/;
+const tweetDateTimeRegex = /(?<date>(?:January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4})\D+(?<startTime>[\d:]+)\D+(?<endTime>[\d:]+) \(UTC(?<utcOffsetTimezone>[-\d]+)\)/;
 
 const twitter = new Twitter({ bearer_token: process.env.TWITTER_API_BEARER_TOKEN! });
 
