@@ -1,6 +1,7 @@
 import Discord from 'discord.js';
 import dotenv from 'dotenv';
 import { DateTime, Duration } from 'luxon';
+import Keyv from 'keyv';
 
 dotenv.config();
 
@@ -13,9 +14,8 @@ dotenv.config();
 // eslint-disable-next-line import/first
 import { fetchLatestMaintenanceTweet, formatDateTime } from './twitter';
 
-let start: DateTime | null = null;
-let end: DateTime | null = null;
 let durationMessage: string | null = null;
+const keyv = new Keyv('sqlite://store.sqlite');
 
 const humanizeDuration = (duration: Duration, options?: { short: boolean }): string => {
   let minutePart: string = '';
@@ -39,18 +39,26 @@ const humanizeDuration = (duration: Duration, options?: { short: boolean }): str
 };
 
 const checkForMaintenance = async () => {
+  const currentStart = DateTime.fromISO(await keyv.get('start'));
+  const currentEnd = DateTime.fromISO(await keyv.get('end'));
+  console.log('currentStart:', currentStart);
+  console.log('currentEnd:', currentEnd);
+
   const maint = await fetchLatestMaintenanceTweet();
-  start = maint?.start ?? null;
-  end = maint?.end ?? null;
+  console.log('fetch result:', maint);
+  if (maint?.start && maint?.end && maint.start > currentStart) {
+    console.log('updating start/end');
+    await keyv.set('start', maint.start.toISO());
+    await keyv.set('end', maint.end.toISO());
+  }
+
   const now = DateTime.now();
-  if (start && end && start <= now && now <= end) {
-    const duration = end.diff(DateTime.now(), ['hours', 'minutes']);
+  if (currentStart && currentEnd && currentStart <= now && now <= currentEnd) {
+    const duration = currentEnd.diff(DateTime.now(), ['hours', 'minutes']);
     durationMessage = humanizeDuration(duration, { short: true });
   } else {
     durationMessage = null;
   }
-  console.log('start:', start);
-  console.log('end:', end);
   console.log('durationMessage:', durationMessage);
 };
 
@@ -65,6 +73,11 @@ client.once('ready', async () => {
   console.log('Bot ready.');
   await client.application?.commands.create({ name: 'maintenance', description: 'Displays info about upcoming Arknights global server maintenance' });
   console.log('/maintenance global command created');
+
+  if (process.env.HOME_GUILD) {
+    await client.guilds.cache.get(process.env.HOME_GUILD as any)?.commands.create({ name: 'maintenance', description: '[GUILD COMMAND] Displays info about upcoming Arknights global server maintenance' });
+    console.log(`/maintenance guild command created in HOME_GUILD with ID ${process.env.HOME_GUILD}`);
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -76,6 +89,8 @@ client.on('interactionCreate', async (interaction) => {
       // - end is in the past, meaning maintenance already concluded.
       // - DateTime.now() is between start and end, meaning maintenance is currently happening
       // - start is in the future, meaning maintenance will happen in the future.
+      const start = DateTime.fromISO(await keyv.get('start'));
+      const end = DateTime.fromISO(await keyv.get('end'));
       if (!start || !end) {
         interaction.reply('No upcoming maintenance announced.');
       } else if (DateTime.now() > end) {
