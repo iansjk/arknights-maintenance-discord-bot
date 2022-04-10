@@ -13,7 +13,6 @@ dotenv.config();
   }
 );
 
-// eslint-disable-next-line import/first
 import { fetchLatestMaintenanceTweet, formatDateTime } from "./twitter";
 
 let durationMessage: string | null = null;
@@ -50,17 +49,23 @@ const humanizeDuration = (
 };
 
 const checkForMaintenance = async () => {
-  const currentStart = DateTime.fromISO(await keyv.get("start"));
-  const currentEnd = DateTime.fromISO(await keyv.get("end"));
+  const startSeconds = await keyv.get("start");
+  const endSeconds = await keyv.get("end");
+  const currentStart = startSeconds ? DateTime.fromSeconds(startSeconds) : null;
+  const currentEnd = endSeconds ? DateTime.fromSeconds(endSeconds) : null;
   console.log("currentStart:", currentStart);
   console.log("currentEnd:", currentEnd);
 
   const maint = await fetchLatestMaintenanceTweet();
   console.log("fetch result:", maint);
-  if (maint?.start && maint?.end && maint.start > currentStart) {
+  if (
+    maint?.start &&
+    maint?.end &&
+    (!currentStart || maint.start > currentStart)
+  ) {
     console.log("updating start/end");
-    await keyv.set("start", maint.start.toISO());
-    await keyv.set("end", maint.end.toISO());
+    await keyv.set("start", maint.start.toSeconds());
+    await keyv.set("end", maint.end.toSeconds());
   }
 
   const now = DateTime.now();
@@ -90,13 +95,11 @@ client.once("ready", async () => {
   console.log("/maintenance global command created");
 
   if (process.env.HOME_GUILD) {
-    await client.guilds.cache
-      .get(process.env.HOME_GUILD as any)
-      ?.commands.create({
-        name: "maintenance",
-        description:
-          "[GUILD COMMAND] Displays info about upcoming Arknights global server maintenance",
-      });
+    await client.guilds.cache.get(process.env.HOME_GUILD)?.commands.create({
+      name: "maintenance",
+      description:
+        "[GUILD COMMAND] Displays info about upcoming Arknights global server maintenance",
+    });
     console.log(
       `/maintenance guild command created in HOME_GUILD with ID ${process.env.HOME_GUILD}`
     );
@@ -112,16 +115,15 @@ client.on("interactionCreate", async (interaction) => {
       // - end is in the past, meaning maintenance already concluded.
       // - DateTime.now() is between start and end, meaning maintenance is currently happening
       // - start is in the future, meaning maintenance will happen in the future.
-      const start = DateTime.fromISO(await keyv.get("start"));
-      const end = DateTime.fromISO(await keyv.get("end"));
+      const startSeconds = await keyv.get("start");
+      const endSeconds = await keyv.get("end");
+      const start = startSeconds ? DateTime.fromSeconds(startSeconds) : null;
+      const end = endSeconds ? DateTime.fromSeconds(endSeconds) : null;
       if (!start || !end) {
         interaction.reply("No upcoming maintenance announced.");
       } else if (DateTime.now() > end) {
         interaction.reply(
-          `No upcoming maintenance announced; most recent maintenance ended ${formatDateTime(
-            end,
-            { withDate: true }
-          )}`
+          `No upcoming maintenance announced; most recent maintenance ended <t:${endSeconds}:F>`
         );
       } else if (DateTime.now() < start) {
         const untilStart = start.diff(DateTime.now(), [
@@ -130,14 +132,9 @@ client.on("interactionCreate", async (interaction) => {
           "minutes",
         ]);
         interaction.reply(
-          `⚠️ **__Upcoming maintenance!__**\n**Start:** ${formatDateTime(
-            start,
-            { withDate: true }
-          )}\n(${humanizeDuration(
+          `⚠️ **__Upcoming maintenance!__**\n**Start:** <t:${startSeconds}:F>\n(${humanizeDuration(
             untilStart
-          )} from now)\n**End:** ${formatDateTime(end, {
-            withDate: true,
-          })}\n**Duration:** ${humanizeDuration(
+          )} from now)\n**End:** <t:${endSeconds}:F>\n**Duration:** ${humanizeDuration(
             end.diff(start, ["hours", "minutes"])
           )}`
         );
@@ -152,6 +149,7 @@ client.on("interactionCreate", async (interaction) => {
   checkForMaintenance();
   setTimeout(
     checkForMaintenanceRepeatedly,
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     60000 * +process.env.CHECK_FREQUENCY_IN_MINUTES!
   );
 })();
